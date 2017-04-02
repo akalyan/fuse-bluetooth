@@ -1,0 +1,26 @@
+{
+  "Title": "fuse-bluetooth",
+  "RootNamespace": "",
+  "Packages": [
+    "Fuse",
+    "FuseJS",
+    "Fuse.Scripting"
+  ],
+  "Includes": [
+    "*",
+    "TestNativeLib.h:ObjCHeader:iOS",
+    "TestNativeLib.m:ObjCSource:iOS"
+  ],
+  "Mobile": {
+    "Orientations": "Portrait"
+  },
+  "iOS": {
+    "BundleIdentifier": "com.akalyan.bluetooth",
+    "PList": {
+      "NSBluetoothPeripheralUsageDescription": "Needs bluetooth to communicate with IOT device",
+      "UIRequiredDeviceCapabilities": [
+        "bluetooth-le"
+      ]
+    }
+  }
+}

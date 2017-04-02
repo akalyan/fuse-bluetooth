@@ -1,0 +1,63 @@
+<App>
+  <JavaScript>
+      var bluetooth = require("Bluetooth");
+      var test = require("Test");
+      var Observable = require('FuseJS/Observable');
+      var $powerStatus = Observable(-1);
+
+      var getPowerStatus = () => {
+        var powerStatus = bluetooth.powerStatus();
+        $powerStatus.value = powerStatus;
+        debug_log(powerStatus);
+      };
+
+      var startScan = () => {
+        bluetooth.startScan(
+          (result) => { debug_log(JSON.parse(result)); },
+          (error) => { debug_log(JSON.parse(error)); }
+        );
+      };
+
+      var getStatus = () => {
+        test.getStatus(
+          function(result) { debug_log(result); }
+        );
+      };
+
+      module.exports = {
+        powerStatus: $powerStatus,
+        getPowerStatus: getPowerStatus,
+        startScan: startScan,
+        getStatus: getStatus
+      };
+  </JavaScript>
+  <StackPanel Margin="50" ItemSpacing="20">
+    <StackPanel Orientation="Horizontal" ItemSpacing="20">
+      <Button Text="Get Power Status" Clicked="{getPowerStatus}" />
+      <Text Value="{powerStatus}" />
+    </StackPanel>
+    <StackPanel Orientation="Horizontal" ItemSpacing="20">
+      <Button Text="Start Scan" Clicked="{startScan}" />
+    </StackPanel>
+    <StackPanel Orientation="Horizontal" ItemSpacing="20">
+      <Button Text="Get Status" Clicked="{getStatus}" />
+    </StackPanel>
+  </StackPanel>
+  <!-- <DockPanel>
+    <StatusBarBackground Dock="Top"/>
+    <NativeViewHost>
+      <WebView Dock="Fill" BaseUrl="file://www/" Url="file://www/index.html" -->  <!-- http://akalyan-cordova-test.s3-website-us-west-2.amazonaws.com" -->
+        <!-- <PageLoaded>
+          <EvaluateJS Handler="{onPageLoaded}">
+              var result = {
+                  url : document.location.href
+              };
+              return result;
+          </EvaluateJS>
+        </PageLoaded> -->
+      <!-- </WebView>
+    </NativeViewHost>
+
+    <BottomBarBackground Dock="Bottom" />
+  </DockPanel> -->
+</App>

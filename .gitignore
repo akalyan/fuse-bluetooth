@@ -1,0 +1,6 @@
+.DS_Store
+.uno/
+build/
+cordova-test/platforms/
+cordova-test/plugins/
+tmp
