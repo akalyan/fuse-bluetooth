@@ -1,5 +1,5 @@
 {
-  "Title": "fuse-bluetooth",
+  "Title": "fuse-bluetooth-example",
   "RootNamespace": "",
   "Packages": [
     "Fuse",
@@ -8,21 +8,20 @@
     "Fuse.Scripting"
   ],
   "Projects": [
-    "../fuse-cordova-bridge/fuse-cordova-bridge.unoproj"
+    "../fuse-bluetooth.unoproj",
+    "../../fuse-cordova-bridge/fuse-cordova-bridge.unoproj"
   ],
   "Includes": [
-    "FuseCDVPluginIncludes.h:ObjCHeader:iOS",
-    "FuseEVOBLE.h:ObjCHeader:iOS",
-    "FuseEVOBLE.m:ObjCSource:iOS",
-    "NSData+Base64.h:ObjCHeader:iOS",
-    "NSData+Base64.m:ObjCSource:iOS",
+    "cordova-plugins/plugins/cordova-plugin-ble/src/ios/EVOBLE.h:ObjCHeader:iOS",
+    "cordova-plugins/plugins/cordova-plugin-ble/src/ios/EVOBLE.m:ObjCSource:iOS",
+    "*.js:Bundle",
     "*"
   ],
   "Mobile": {
     "Orientations": "Portrait"
   },
   "iOS": {
-    "BundleIdentifier": "com.akalyan.bluetooth",
+    "BundleIdentifier": "com.akalyan.bluetooth-example",
     "PList": {
       "NSBluetoothPeripheralUsageDescription": "Needs bluetooth to communicate with IOT device",
       "UIRequiredDeviceCapabilities": [

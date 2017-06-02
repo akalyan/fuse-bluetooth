@@ -1,0 +1,344 @@
+<App>
+  <JavaScript>
+      var bluetooth = require("Bluetooth");
+      var Observable = require('FuseJS/Observable');
+      var Base64 = require("FuseJS/Base64");
+
+      var scanResults$ = Observable();
+      var allScanResults = [
+      ];
+
+      function updateScanResults() {
+        scanResults$.refreshAll(allScanResults,
+
+          // Compare
+          function(oldItem, newItem){
+            return oldItem.address === newItem.address;
+          },
+
+          // Update
+          function(oldItem, newItem){
+            oldItem.rssi.add(newItem.rssi);
+          },
+
+          // Create
+          function(newItem){
+            return {
+              address: newItem.address,
+              name: newItem.name,
+              handle: Observable(),
+              rssi: Observable(newItem.rssi),
+              services: Observable(),
+              connectionState: Observable('disconnected')
+            };
+          }
+        );
+      }
+
+      updateScanResults();
+
+      function startScan() {
+        allScanResults = [];
+        bluetooth.startScan(
+          (result) => {
+            debug_log('Got JS scan result: ');
+            debug_log(result);
+            var parsed = JSON.parse(result);
+            if (parsed) {
+              allScanResults.push(parsed);
+              updateScanResults();
+            }
+          },
+          (error) => { debug_log(JSON.parse(error)); },
+          {}
+        );
+
+        setTimeout(function() {
+          stopScan();
+        }, 15000);
+      }
+
+      function stopScan() {
+        bluetooth.stopScan();
+      }
+
+      function characteristics(device, service, serviceIndex) {
+        bluetooth.characteristics(
+          device.handle.value,
+          service.handle,
+          (result) => {
+            var res = JSON.parse(result);
+            for (i = 0; i < res.length; i++) {
+              var characteristic = res[i];
+              debug_log('Got properties: ' + characteristic.properties);
+              debug_log('  canRead: ' + (characteristic.properties & 2));
+
+              characteristic.canRead = (characteristic.properties & 2) > 0;
+              characteristic.canWrite = (characteristic.properties & 8) > 0;
+              characteristic.canNotify = (characteristic.properties & 16) > 0;
+              characteristic.readValue = Observable('');
+              characteristic.writeValue = Observable('');
+              characteristic.lastNotification = Observable('');
+              characteristic.deviceHandle = device.handle.value;
+              service.characteristics.add(characteristic);
+            }
+          },
+          (error) => {
+            debug_log(JSON.parse(error));
+          }
+        );
+      }
+
+      function services(device) {
+        bluetooth.services(
+          device.handle.value,
+          (result) => {
+            var res = JSON.parse(result);
+            var registeredUuids = {};
+
+            for (i = 0; i < res.length; i++) {
+              var service = res[i];
+              if (!registeredUuids[service.uuid]) {
+                registeredUuids[service.uuid] = 1;
+                service.characteristics = Observable();
+                device.services.add(service);
+                characteristics(device, service, i);
+              }
+            }
+          },
+          (error) => {
+            debug_log(JSON.parse(error));
+          }
+        );
+      }
+
+      function disconnect(arg) {
+        debug_log('about to disconnect');
+        bluetooth.close(arg.data.handle.value);
+      }
+
+      function connect(arg) {
+        if (arg.data.connectionState.value != 'disconnected') return;
+
+        var device = arg.data;
+        bluetooth.connect(
+          device.address,
+          (result) => {
+            var res = JSON.parse(result);
+            if (res) {
+              device.handle.value = res.deviceHandle;
+              if (res.state == 2) {
+                device.connectionState.value = 'connected';
+                services(device);
+              } else if (res.state == 1) {
+                device.connectionState.value = 'connecting';
+              } else {
+                debug_log('disconnected');
+                device.connectionState.value = 'disconnected';
+                device.services.clear();
+              }
+            }
+          },
+          (error) => {
+            debug_log(JSON.parse(error));
+          }
+        );
+      }
+
+      function enableNotification(arg) {
+        var characteristic = arg.data;
+        var deviceHandle = characteristic.deviceHandle;
+        var charHandle = characteristic.handle;
+
+        bluetooth.enableNotification(
+          deviceHandle,
+          charHandle,
+          () => {
+            characteristic.lastNotification.value = (new Date()).toLocaleTimeString();
+          },
+          (error) => {
+            debug_log(JSON.parse(error));
+          }
+        );
+      }
+
+      function readCharacteristic(arg) {
+        var characteristic = arg.data;
+        var deviceHandle = characteristic.deviceHandle;
+        var charHandle = characteristic.handle;
+
+        bluetooth.readCharacteristic(
+          deviceHandle,
+          charHandle,
+          (readValue) => {
+            var parsed = JSON.parse(readValue);
+            if (typeof parsed == 'object') {
+              if (parsed.CDVType === 'ArrayBuffer') {
+                characteristic.readValue.value = Base64.decodeAscii(parsed.data);
+              }
+            } else {
+              characteristic.readValue.value = readValue;
+            }
+          },
+          (error) => {
+            debug_log(JSON.parse(error));
+            characteristic.readValue.value = 'Error: ' + error;
+          }
+        );
+      }
+
+      function writeCharacteristic(arg) {
+        var characteristic = arg.data;
+        var deviceHandle = characteristic.deviceHandle;
+        var charHandle = characteristic.handle;
+        var value = Base64.encodeAscii(characteristic.writeValue.value);
+
+        if (characteristic.writeValue.value != '') {
+          bluetooth.writeCharacteristic(
+            deviceHandle,
+            charHandle,
+            value,
+            () => {
+              characteristic.writeValue.value = '';
+            },
+            (error) => {
+              debug_log(JSON.parse(error));
+              characteristic.writeValue.value = JSON.parse(error);
+            }
+          );
+        }
+      }
+
+      module.exports = {
+
+        // functions
+        startScan: startScan,
+        stopScan: stopScan,
+        connect: connect,
+        disconnect: disconnect,
+        enableNotification: enableNotification,
+        readCharacteristic: readCharacteristic,
+        writeCharacteristic: writeCharacteristic,
+
+        // observables
+        scanResultsObs: scanResults$
+      };
+
+  </JavaScript>
+
+  <DockPanel>
+    <StatusBarBackground Dock="Top" />
+    <BottomBarBackground Dock="Bottom" />
+
+    <Rectangle ux:Class="MyButton" CornerRadius="4">
+      <string ux:Property="Text" />
+
+      <SolidColor ux:Name="color" Color="#fff" />
+      <Stroke Width="1" Color="#ddd" />
+      <Text Value="{ReadProperty Text}" Margin="10" />
+
+      <WhilePressed>
+        <Change color.Color="#888" Duration="0.2" />
+      </WhilePressed>
+    </Rectangle>
+
+    <Panel ux:Class="SmallButton">
+      <string ux:Property="Text" />
+      <Text Value="{ReadProperty Text}" Margin="5, 5, 5, 5" HitTestMode="LocalBounds" Color="#011892" FontSize="13" />
+    </Panel>
+
+    <StackPanel ux:Class="Listing" ItemSpacing="5" Padding="5" />
+
+    <Listing ux:Class="CharacteristicListing">
+      <Text ux:Name="charUuid" Value="Char: {uuid}" FontSize="12" />
+
+      <WhileTrue Value="{canRead}">
+        <DockPanel>
+          <Text FontSize="12" Value="Read value: {readValue}" Margin="5, 0, 5, 0" Padding="5, 0, 5, 0" Alignment="CenterLeft" />
+          <SmallButton Text="Read" Dock="Right" Clicked="{readCharacteristic}" />
+        </DockPanel>
+      </WhileTrue>
+      <WhileTrue Value="{canWrite}">
+        <DockPanel>
+          <TextInput Value="{writeValue}" Margin="5, 0, 5, 0" Padding="5, 0, 5, 0">
+            <Rectangle Layer="Background" CornerRadius="3">
+              <Stroke Width="1" Color="#ccc" />
+              <SolidColor Color="White" Opacity="0.5" />
+            </Rectangle>
+          </TextInput>
+          <SmallButton Text="Write" Dock="Right" Clicked="{writeCharacteristic}" />
+        </DockPanel>
+      </WhileTrue>
+      <WhileTrue Value="{canNotify}">
+        <DockPanel>
+          <Text FontSize="12" Value="Last notification time: {lastNotification}" Margin="5, 0, 5, 0" Padding="5, 0, 5, 0" Alignment="CenterLeft" />
+          <SmallButton Text="Subscribe" Dock="Right" Clicked="{enableNotification}" />
+        </DockPanel>
+      </WhileTrue>
+
+    </Listing>
+
+    <Listing ux:Class="ServiceListing">
+      <Text ux:Name="serviceUuid" Value="Service: {uuid}" FontSize="12" />
+
+      <Each Items="{characteristics}">
+        <CharacteristicListing />
+      </Each>
+
+    </Listing>
+
+    <Listing ux:Class="DeviceListing">
+      <SolidColor Color="#EAEAEA" ux:Name="col" />
+
+      <Text Value="{name}" FontSize="16" Color="#000" />
+      <Text Value="Address: {address}" FontSize="13" Color="#7980FF" />
+
+      <StateGroup Active="{connectionState}">
+        <State ux:Name="disconnected">
+          <Set connectButton.Visibility="Visible" />
+          <Set disconnectButton.Visibility="Collapsed" />
+        </State>
+        <State ux:Name="connecting">
+          <Cycle Target="col.Opacity" Low="0.2" High="0.8" />
+          <Set connectButton.Visibility="Collapsed" />
+          <Set disconnectButton.Visibility="Collapsed" />
+        </State>
+        <State ux:Name="connected">
+          <Change col.Color="#D4FB78" />
+          <Set connectButton.Visibility="Collapsed" />
+          <Set disconnectButton.Visibility="Visible" />
+        </State>
+      </StateGroup>
+
+      <Each Items="{services}">
+        <ServiceListing />
+      </Each>
+
+      <StackPanel Orientation="Horizontal" ItemSpacing="5" Alignment="Right">
+        <MyButton ux:Name="connectButton" Text="Connect" Clicked="{connect}" />
+        <MyButton ux:Name="disconnectButton" Text="Disconnect" Clicked="{disconnect}" Visibility="Collapsed" />
+      </StackPanel>
+
+    </Listing>
+
+    <ScrollView>
+
+      <StackPanel Margin="10" ItemSpacing="20">
+
+        <StackPanel Orientation="Horizontal" ItemSpacing="20">
+          <MyButton Text="Start Scan" Clicked="{startScan}" />
+          <MyButton Text="Stop Scan" Clicked="{stopScan}" />
+        </StackPanel>
+
+        <StackPanel ItemSpacing="5">
+          <Each Items="{scanResultsObs}">
+            <DeviceListing />
+          </Each>
+        </StackPanel>
+      </StackPanel>
+
+    </ScrollView>
+
+  </DockPanel>
+
+</App>

@@ -1,6 +1,7 @@
 .DS_Store
 .uno/
 build/
-cordova-test/platforms/
-cordova-test/plugins/
+example/build/
+example/cordova-plugins/
+example/BluetoothMock.js
 tmp
